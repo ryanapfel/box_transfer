@@ -42,10 +42,14 @@ class FileTransfer:
     '''
 
     def moveFiles(self, src):
+        if self.verbose:
+            print(src, self.destDir)
+
         try:
             shutil.copy(src, self.destDir)
             return True
         except Exception as e:
+            print(e)
             return False
 
     def addToDB(self, study, success, src, file):

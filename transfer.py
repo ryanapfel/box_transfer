@@ -5,6 +5,8 @@ import click
 from src.FileTransfer import FileTransfer
 import sqlite3 as sql
 import os
+from pathlib import Path
+import pandas as pd
 
 
 # ESTABLISH DEFAULTS
@@ -20,7 +22,7 @@ LOG_DEST = LOG_PATH + LOG_FILE_NAME
 
 
 VERBOSE = config['logs']['verbose']
-DESTDIR = USER + config['destination']['destination']
+DESTDIR = config['destination']['destination']
 ROOT_DIRS = {k: USER + v for k, v in dict(config['sourcePaths']).items()}
 
 
@@ -30,21 +32,49 @@ def cli():
 
 
 @cli.command(help='initialize db if not already')
-@click.option('--dbpath', default=DBPATH)
+@click.option('--path', default=DBPATH)
 def initdb(path):
-    with sql.connect(path) as conn:
-        cursor = conn.cursor()
+    path = Path(path)
+    if not path.is_file():
+        print("DB not created")
+        with open(path, 'w') as fp:
+            pass
+        print("Created DB")
+    else:
+        print("DB already created")
+    try:
+        with sql.connect(path) as conn:
+            cursor = conn.cursor()
 
-        cursor.execute('''CREATE TABLE uploads
-                    (date text, study text,  root_dir text, file text)''')
-        cursor.execute('''Create Table errors
-                        (date date, study text, error text)''')
+            cursor.execute('''CREATE TABLE uploads
+                        (date date, study text,  root_dir text, file text)''')
+            cursor.execute('''Create Table errors
+                            (date date, study text, error text)''')
 
-        conn.commit()
+            conn.commit()
+        print("Table initialized inside db")
+    except Exception as e:
+        print(e)
+    
+
+@cli.command(help='List all studies that have been transfered')
+@click.option('--range', default='day', help='timeframe to query succesful transfers')
+@click.option('--path', default=DBPATH)
+def ls(range, path):
+    conn = sql.connect(path)
+    if range == 'day':
+        query = """SELECT * FROM uploads WHERE date BETWEEN datetime('now', 'start of day') AND datetime('now', 'localtime');"""
+    print(pd.read_sql(query, conn))
+    conn.close()
+
+    
+
+
+
 
 
 @cli.command(help='List all possible studies that can be transfered')
-def ls():
+def studies():
     for s in ROOT_DIRS:
         print(s)
 
@@ -53,9 +83,9 @@ def ls():
 @click.option('--study', default='')
 @click.option('--log_path', default=LOG_PATH)
 @click.option('--log_file_name', default=LOG_FILE_NAME)
-def transfer(study, log_path, log_file_name):
+def transfer(study, log_path, log_file_name, verbose=True):
     fn = log_path + log_file_name
-    ft = FileTransfer(DBPATH, ROOT_DIRS, DESTDIR)
+    ft = FileTransfer(DBPATH, ROOT_DIRS, DESTDIR, verbose=verbose)
     ft.transfer(study)
     ft.create_log(fn)
 
