@@ -144,7 +144,7 @@ class FileTransfer:
                 for file in files:
                     if file.endswith('.zip') and file not in self.alreadyUploaded:
                         src = f'{root}/{file}'
-                        self.uploaded.append((True, study, src, file))
+                        self.uploaded.append((datetime.now(), study, src, file))
 
         self.insert_into(self.uploaded)
         print("Finished Inserting")

@@ -1,7 +1,7 @@
-# assets/
-# spreadsheets/
-# .vscode/
-# .ipynb_checkpoints
-# config.cfg
-# Database.sql
-# test.ipynb
+assets/
+spreadsheets/
+.vscode/
+.ipynb_checkpoints
+config.cfg
+Database.sql
+test.ipynb
