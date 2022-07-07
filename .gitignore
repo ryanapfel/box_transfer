@@ -6,3 +6,4 @@ config.cfg
 Database.sql
 test.ipynb
 uploads.sql
+data/
