@@ -19,11 +19,11 @@ class FileTransfer:
         self.DEPTH = 1
 
     def __repr__(self):
-        printString = f'''
+        printString = f"""
         {self.database_path} = database_path
         {self.rootDirectories} = rootDirectories
         {self.destDir} = destDir
-        '''
+        """
         return printString
 
     def run_query(self, q):
@@ -36,10 +36,10 @@ class FileTransfer:
             cursor = conn.cursor()
             cursor.execute(q, params)
 
-    '''
+    """
     args: src dest of files
     returns: True if transfer succesful
-    '''
+    """
 
     def moveFiles(self, src):
         if self.verbose:
@@ -54,25 +54,25 @@ class FileTransfer:
 
     def addToDB(self, study, success, src, file):
         if success:
-            query = f'''INSERT INTO uploads VALUES (?,?,?,?)'''
+            query = f"""INSERT INTO uploads VALUES (?,?,?,?)"""
             params = (datetime.now(), study, src, file)
             self.uploaded.append(params)
         else:
-            query = f'''INSERT INTO errors VALUES (?,?,?)'''
+            query = f"""INSERT INTO errors VALUES (?,?,?)"""
             params = (datetime.now(), study, src)
             self.errors.append(params)
 
         if self.verbose and success:
-            print(f'{study} -- moved {file} to destination')
+            print(f"{study} -- moved {file} to destination")
         elif self.verbose and not success:
-            print(f'{study} -- ERROR moving {file} to destination')
+            print(f"{study} -- ERROR moving {file} to destination")
 
         self.paramterized_query(query, params)
 
     def already_transfered(self):
         with sql.connect(self.database_path) as conn:
             cursor = conn.cursor()
-            cursor.execute(f'''SELECT file FROM uploads''')
+            cursor.execute(f"""SELECT file FROM uploads""")
             sqlOut = cursor.fetchall()
 
         return [item for sublist in sqlOut for item in sublist]
@@ -84,26 +84,25 @@ class FileTransfer:
             path = self.rootDirectories[study]
             for root, _, files in self.walklevel(path, self.DEPTH):
                 for file in files:
-                    src = f'{root}/{file}'
-                    if file.endswith('.zip') and file not in self.alreadyUploaded:
+                    src = f"{root}/{file}"
+                    if file.endswith(".zip") and file not in self.alreadyUploaded:
                         succesful = self.moveFiles(src)
                         self.addToDB(study, succesful, src, file)
                         studiesMoved += 1
-                    elif file.endswith('.pdf') and file not in self.alreadyUploaded:
+                    elif file.endswith(".pdf") and file not in self.alreadyUploaded:
                         # TODO: store pdf's somewhere as they might be valueable
                         pass
                     elif file in self.alreadyUploaded and self.verbose:
-                        print(f'Already added {file}')
+                        print(f"Already added {file}")
 
     def insert_into(self, to_insert):
         with sql.connect(self.database_path) as conn:
             cursor = conn.cursor()
-            cursor.executemany(
-                'INSERT INTO uploads VALUES(?,?,?,?);', to_insert)
+            cursor.executemany("INSERT INTO uploads VALUES(?,?,?,?);", to_insert)
 
     def reset_db(self, *args):
         if not args:
-            query = f'''DELETE FROM uploads'''
+            query = f"""DELETE FROM uploads"""
             self.run_query(query)
         else:
             for arg in args:
@@ -120,9 +119,9 @@ class FileTransfer:
                 if arg in self.rootDirectories:
                     searchStudies.append(arg)
                 else:
-                    print(f'{arg} not a valid study, please check declaration')
+                    print(f"{arg} not a valid study, please check declaration")
 
-        print('Searching : ', ' '.join(searchStudies))
+        print("Searching : ", " ".join(searchStudies))
 
         return searchStudies
 
@@ -142,25 +141,24 @@ class FileTransfer:
             path = self.rootDirectories[study]
             for root, _, files in self.walklevel(path, self.DEPTH):
                 for file in files:
-                    if file.endswith('.zip') and file not in self.alreadyUploaded:
-                        src = f'{root}/{file}'
+                    if file.endswith(".zip") and file not in self.alreadyUploaded:
+                        src = f"{root}/{file}"
                         self.uploaded.append((datetime.now(), study, src, file))
 
         self.insert_into(self.uploaded)
         print("Finished Inserting")
 
     def create_log(self, output_path):
-        df = pd.DataFrame(self.uploaded, columns=[
-                          'Date', 'Study', 'Path', 'File'])
+        df = pd.DataFrame(self.uploaded, columns=["Date", "Study", "Path", "File"])
 
-        errors = pd.DataFrame(self.errors, columns=['Date', 'Study', 'File'])
+        errors = pd.DataFrame(self.errors, columns=["Date", "Study", "File"])
 
-        writer = pd.ExcelWriter(output_path, engine='xlsxwriter')
-        df.to_excel(writer, sheet_name='Uploaded')
-        errors.to_excel(writer, sheet_name='Errors')
+        writer = pd.ExcelWriter(output_path, engine="xlsxwriter")
+        df.to_excel(writer, sheet_name="Uploaded")
+        errors.to_excel(writer, sheet_name="Errors")
 
-        worksheet = writer.sheets['Uploaded']
-        errorWorksheet = writer.sheets['Errors']
+        worksheet = writer.sheets["Uploaded"]
+        errorWorksheet = writer.sheets["Errors"]
         # Get the dimensions of the dataframe.
         (max_row, max_col) = df.shape
         # Set the column widths, to make the dates clearer.
@@ -176,9 +174,9 @@ class FileTransfer:
 
         df = pd.read_sql("SELECT * FROM uploads", conn)
 
-        writer = pd.ExcelWriter(output_path, engine='xlsxwriter')
-        df.to_excel(writer, sheet_name='Uploaded')
-        worksheet = writer.sheets['Uploaded']
+        writer = pd.ExcelWriter(output_path, engine="xlsxwriter")
+        df.to_excel(writer, sheet_name="Uploaded")
+        worksheet = writer.sheets["Uploaded"]
         (max_row, max_col) = df.shape
         worksheet.set_column(0, max_col, 20)
 
