@@ -8,7 +8,7 @@ import click
 import pandas as pd
 
 from .cloud_transfer import FileTransfer
-from .transfer import Proccess
+from .transfer import Process
 
 # ESTABLISH DEFAULTS
 # config = configparser.ConfigParser()
@@ -208,9 +208,9 @@ def log():
     "path",
     type=click.Path(exists=True),
 )
-def decompress(path):
-    pd = Proccess(path)
-    pd.proccess_dir()
+def zip(path):
+    pd = Process(path)
+    pd.process_dir()
 
 
 if __name__ == "__main__":

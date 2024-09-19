@@ -4,9 +4,10 @@ import zipfile
 from collections import defaultdict
 
 import pydicom
+from tqdm import tqdm
 
 
-class Proccess:
+class Process:
     def __init__(self, directory, output_path="clean"):
         self.directory = directory
         self.output_path = os.path.join(self.directory, output_path)
@@ -17,11 +18,14 @@ class Proccess:
         # Initialize error tracking
         self.results = {"success": 0, "zip_errors": defaultdict(int), "dicom_errors": defaultdict(int)}
 
-    def proccess_dir(self):
-        for filename in os.listdir(self.directory):
-            if filename.endswith(".zip"):
-                full_path = os.path.join(self.directory, filename)
-                self.process_zip(full_path)
+    def process_dir(self):
+        # Get the list of all ZIP files in the directory
+        zip_files = [f for f in os.listdir(self.directory) if f.endswith(".zip")]
+
+        # Use tqdm to show a progress bar for the ZIP files processing
+        for filename in tqdm(zip_files, desc="Processing ZIP files", unit="file"):
+            full_path = os.path.join(self.directory, filename)
+            self.process_zip(full_path)
 
         # Write error/success results to a JSON file
         json_output_path = os.path.join(self.output_path, "processing_results.json")
@@ -63,4 +67,3 @@ class Proccess:
             os.makedirs(local_path)
 
         ds.save_as(os.path.join(local_path, l_name))
-
