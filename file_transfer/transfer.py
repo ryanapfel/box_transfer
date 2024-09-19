@@ -17,7 +17,7 @@ class Proccess:
         # Initialize error tracking
         self.results = {"success": 0, "zip_errors": defaultdict(int), "dicom_errors": defaultdict(int)}
 
-    def process_dir(self):
+    def proccess_dir(self):
         for filename in os.listdir(self.directory):
             if filename.endswith(".zip"):
                 full_path = os.path.join(self.directory, filename)
