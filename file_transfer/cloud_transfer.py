@@ -1,10 +1,10 @@
-import pandas as pd
-from datetime import datetime
-import shutil
 import os
-import sqlite3 as sql
-import xlsxwriter
 import re
+import shutil
+import sqlite3 as sql
+from datetime import datetime
+
+import pandas as pd
 
 
 class FileTransfer:
@@ -136,7 +136,6 @@ class FileTransfer:
                 del dirs[:]
 
     def fillDataBase(self, *args):
-
         for study in self.getSearchableStudies(args):
             path = self.rootDirectories[study]
             for root, _, files in self.walklevel(path, self.DEPTH):

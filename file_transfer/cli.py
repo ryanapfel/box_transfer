@@ -1,23 +1,24 @@
-from ast import Raise
 import configparser
-from email.policy import default
-import click
-from src.FileTransfer import FileTransfer
-import sqlite3 as sql
-import os
-from pathlib import Path
-import pandas as pd
 import json
+import os
+import sqlite3 as sql
+from pathlib import Path
+
+import click
+import pandas as pd
+
+from .cloud_transfer import FileTransfer
+from .transfer import Proccess
 
 # ESTABLISH DEFAULTS
-config = configparser.ConfigParser()
-relativePath = os.path.dirname(os.path.abspath(__file__))
-config.read(os.path.join(relativePath, "config.cfg"))
+# config = configparser.ConfigParser()
+# relativePath = os.path.dirname(os.path.abspath(__file__))
+# config.read(os.path.join(relativePath, "config.cfg"))
 
-LOG_PATH = os.path.join(config["logs"]["log_destination"])
-LOG_DEST = os.path.join(LOG_PATH, config["logs"]["log_file_name"])
+# LOG_PATH = os.path.join(config["logs"]["log_destination"])
+# LOG_DEST = os.path.join(LOG_PATH, config["logs"]["log_file_name"])
 
-VERBOSE = config["logs"]["verbose"]
+# VERBOSE = config["logs"]["verbose"]
 
 
 @click.group()
@@ -101,6 +102,7 @@ def addstudy(study, spath):
 
     with open(defaultStudyPath) as f:
         studies = json.load(f)
+
     if study in studies.keys():
         raise ValueError("Study Path Already Exists. New study path was not added")
 
@@ -199,6 +201,16 @@ def log():
     ft = FileTransfer(dbPath, studies, "")
     ft.master_log(LOG_DEST)
     click.echo(f"Master Log Exported to: {LOG_DEST}")
+
+
+@cli.command(help="Add directory to clean in as first arg")
+@click.argument(
+    "path",
+    type=click.Path(exists=True),
+)
+def decompress(path):
+    pd = Proccess(path)
+    pd.proccess_dir()
 
 
 if __name__ == "__main__":
