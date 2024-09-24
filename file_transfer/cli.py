@@ -102,16 +102,74 @@ def studies():
 
 
 @cli.command(help="Transfer files from study folder to Horos DB folder")
-@click.option("--study", default=None)
-def transfer(study):
+@click.option(
+    "--study",
+    default=None,
+    help="Specify the study to transfer. If not provided, all studies are transferred.",
+)
+@click.option(
+    "--retry-errors",
+    is_flag=True,
+    help="Retry transferring files that previously encountered errors.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Simulate the transfer without actually transferring files.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Force transfer of files even if they have already been transferred.",
+)
+def transfer(study, retry_errors, dry_run, force):
     studies = get_studies()
     dbPath = init_db()
-    ft = DicomProcessTransfer(dbPath, studies, "")
-    if study == None:
-        ft.transfer()
-    else:
-        ft.transfer(study)
 
+    # Initialize DicomProcessTransfer with the provided database path and studies
+    ft = DicomProcessTransfer(dbPath, studies, "")
+
+    # If no study is provided, process all studies, else process the specific study
+    if study is None:
+        ft.transfer(retry_errors=retry_errors, dry_run=dry_run, force=force)
+    else:
+        ft.transfer(study, retry_errors=retry_errors, dry_run=dry_run, force=force)
+
+    # Create the log at the end of the transfer
+    ft.create_log()
+
+
+@cli.command(help="Transfer files from a specific subdirectory of the input path")
+@click.option("--study", required=True, help="Specify the study to transfer.")
+@click.option(
+    "--directory",
+    required=True,
+    help="Specify the subdirectory inside the input path.",
+)
+@click.option(
+    "--retry-errors",
+    is_flag=True,
+    help="Retry transferring files that previously encountered errors.",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="Simulate the transfer without actually transferring files.",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Force transfer of files even if they have already been transferred.",
+)
+def transfer_sub(study, directory, retry_errors, dry_run, force):
+    studies = get_studies()
+    dbPath = init_db()
+
+    ft = DicomProcessTransfer(dbPath, studies, "")
+
+    ft.transfer_subdirectory(
+        study, directory, retry_errors=retry_errors, dry_run=dry_run, force=force
+    )
     ft.create_log()
 
 
@@ -160,6 +218,27 @@ def zip(path):
 def show_db_path():
     db_path = get_db_path()
     print(f"Database path: {db_path}")
+
+
+@cli.command(help="Delete all contents of the destination folder")
+@click.option("--study", required=True, help="Specify the study whose destination folder you want to clear.")
+def delete_destination(study):
+    studies = get_studies()
+    db_path = init_db()
+
+    # Check if the study exists
+    if study not in studies:
+        print(f"Study '{study}' not found in the database.")
+        return
+
+    # Get the output path of the specified study
+    output_path = studies[study]["output_path"]
+
+    # Initialize the transfer object and delete the destination
+    ft = DicomProcessTransfer(db_path, studies, "")
+    ft.delete_destination(output_path)
+
+    print(f"All contents of the destination folder '{output_path}' have been deleted.")
 
 
 if __name__ == "__main__":

@@ -62,13 +62,10 @@ class Process:
                         ct += 1
                         self.results["success"] += 1  # Track success
 
-                    except Exception as dicom_error:
-                        print(dicom_error)
-                        # Track DICOM processing errors
+                    except Exception:
                         self.results["dicom_errors"][name_without_extension] += 1
 
-        except Exception as zip_error:
-            # Track ZIP file processing errors
+        except Exception:
             self.results["zip_errors"][name_without_extension] += 1
 
     def process_dicom(self, ds, name_without_extension, ct, decompress=False):
