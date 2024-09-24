@@ -7,18 +7,15 @@ from pathlib import Path
 import click
 import pandas as pd
 
-from .cloud_transfer import FileTransfer
-from .transfer import Process
-
-# ESTABLISH DEFAULTS
-# config = configparser.ConfigParser()
-# relativePath = os.path.dirname(os.path.abspath(__file__))
-# config.read(os.path.join(relativePath, "config.cfg"))
-
-# LOG_PATH = os.path.join(config["logs"]["log_destination"])
-# LOG_DEST = os.path.join(LOG_PATH, config["logs"]["log_file_name"])
-
-# VERBOSE = config["logs"]["verbose"]
+from .cloud_transfer import (
+    DicomProcessTransfer,
+    FileTransfer,
+    get_db_path,
+    get_studies,
+    init_db,
+    reset_database,
+)
+from .proccess import Process
 
 
 @click.group()
@@ -26,191 +23,143 @@ def cli():
     pass
 
 
-def createDataFolder():
-    dataPath = os.path.join(relativePath, "data")
-    if not os.path.isdir(dataPath):
-        os.mkdir(dataPath)
-    return dataPath
+@cli.command(help="Initialize database")
+def init():
+    init_db()
 
 
-def initDB(path):
-    path = Path(path)
-
-    if not path.is_file():
-        print("DB not created")
-        with open(path, "w") as fp:
-            pass
-        print("Created DB")
-
-    try:
-        with sql.connect(path) as conn:
-            cursor = conn.cursor()
-
-            cursor.execute(
-                """CREATE TABLE uploads
-                        (date date, study text,  root_dir text, file text)"""
-            )
-            cursor.execute(
-                """Create Table errors
-                            (date date, study text, error text)"""
-            )
-
-            conn.commit()
-        print("Tables initialized inside db")
-    except Exception as e:
-        print(e)
-
-
-def getDatabasePath():
-    dataPath = createDataFolder()
-    dbpath = os.path.join(dataPath, "uploads.sql")
-    if not os.path.isfile(dbpath):
-        initDB(dbpath)
-    return dbpath
-
-
-def getStudies():
-    studiesPath = os.path.join(relativePath, "data/studies.json")
-    with open(studiesPath) as f:
-        studies = json.load(f)
-
-    return studies
-
-
-def getDestinations():
-    studiesPath = os.path.join(relativePath, "data/destinations.json")
-    with open(studiesPath) as f:
-        studies = json.load(f)
-    return studies
-
-
-@cli.command(help="Add study locations and there corresponding cloud folders")
+@cli.command(help="Add study locations with input and output paths")
 @click.option("--study", prompt="Enter the study name", type=str)
 @click.option(
-    "--spath",
-    prompt="Enter the path to where files are located for this study",
-    type=click.Path(exists=True),
+    "--input-path",
+    prompt="Enter the input path (must exist)",
+    type=click.Path(),
 )
-def addstudy(study, spath):
-    dataPath = createDataFolder()
-
-    defaultStudyPath = os.path.join(dataPath, "studies.json")
-    if not os.path.isfile(defaultStudyPath):
-        with open(defaultStudyPath, "w+") as f:
-            json.dump({}, f, indent=2)
-            print(f"Initializing a new StudyFile at {defaultStudyPath}")
-
-    with open(defaultStudyPath) as f:
-        studies = json.load(f)
-
-    if study in studies.keys():
-        raise ValueError("Study Path Already Exists. New study path was not added")
-
-    if spath in studies.values():
-        raise ValueError("Path is already in destinations")
-    studies[study] = spath
-
-    with open(defaultStudyPath, "w") as f:
-        json.dump(studies, f, indent=2)
-        print(f"Added {study} into study locations")
-
-
-@cli.command(help="Add destinations")
-@click.option("--name", prompt="Enter the transfer destination database name", type=str)
 @click.option(
-    "--spath",
-    prompt="Enter the path to where files should be transfered",
-    type=click.Path(exists=True),
+    "--output-path",
+    prompt="Enter the output path (will be created if it doesn't exist)",
+    type=click.Path(),
 )
-def adddestination(name, spath):
-    dataPath = createDataFolder()
+def addstudy(study, input_path, output_path):
+    db_path = get_db_path()
 
-    defaultStudyPath = os.path.join(dataPath, "destinations.json")
-    if not os.path.isfile(defaultStudyPath):
-        with open(defaultStudyPath, "w") as f:
-            json.dump({}, f, indent=2)
-            print(f"Initializing a new destination file at {defaultStudyPath}")
+    # Sanitize paths by removing quotes or any extra spaces
+    input_path = Path(input_path.strip().strip("'").strip('"'))
+    output_path = Path(output_path.strip().strip("'").strip('"'))
 
-    with open(defaultStudyPath) as f:
-        dests = json.load(f)
-    if name in dests.keys():
-        raise ValueError("Transfer destination already exists")
+    # Check if input path exists
+    if not input_path.exists():
+        print(f"Input path '{input_path}' does not exist. Please provide a valid path.")
+        return
 
-    if spath in dests.values():
-        raise ValueError("Path is already in destinations")
+    # Ensure output path exists or create it
+    if not output_path.exists():
+        print(f"Output path '{output_path}' does not exist. Creating it now.")
+        output_path.mkdir(parents=True)
 
-    dests[name] = spath
+    try:
+        with sql.connect(db_path) as conn:
+            cursor = conn.cursor()
 
-    with open(defaultStudyPath, "w") as f:
-        json.dump(dests, f, indent=2)
-        print(f"Added {name} into transfer destinations")
+            # Check if the study name already exists
+            cursor.execute("SELECT * FROM studies WHERE study_name = ?", (study,))
+            existing_study = cursor.fetchone()
+
+            if existing_study:
+                raise ValueError(
+                    "Study name already exists. New study path was not added."
+                )
+
+            # Insert the study with input and output paths into the database
+            cursor.execute(
+                "INSERT INTO studies (study_name, input_path, output_path) VALUES (?, ?, ?)",
+                (study, str(input_path), str(output_path)),
+            )
+            conn.commit()
+
+            print(
+                f"Added '{study}' with input path '{input_path}' and output path '{output_path}' into the studies table."
+            )
+
+    except sql.Error as e:
+        print(f"An error occurred: {e}")
 
 
-@cli.command(help="List all studies that have been transfered")
-@click.option("--range", default="day", help="timeframe to query succesful transfers")
-def ls(range):
-    dbPath = getDatabasePath()
-    conn = sql.connect(dbPath)
-    if range == "day":
-        query = """SELECT study, root_dir, file FROM uploads WHERE date BETWEEN datetime('now', 'start of day') AND datetime('now', 'localtime');"""
-    print(pd.read_sql(query, conn).to_string())
-    conn.close()
-
-
-@cli.command(help="List all possible studies that can be transfered")
+@cli.command(help="List all studies with their input and output paths")
 def studies():
-    studies = getStudies()
-    for s in studies:
-        print(s)
+    # Retrieve all studies from the database
+    studies = get_studies()
+
+    if studies:
+        print("List of studies:")
+        for study_name, paths in studies.items():
+            input_path = paths["input_path"]
+            output_path = paths["output_path"]
+            print(f"Study: {study_name}")
+            print(f"  Input Path: {input_path}")
+            print(f"  Output Path: {output_path}")
+            print("-" * 40)  # Divider for better readability
 
 
 @cli.command(help="Transfer files from study folder to Horos DB folder")
 @click.option("--study", default=None)
 def transfer(study):
-    studies = getStudies()
-    dbPath = getDatabasePath()
-    for name, path in getDestinations().items():
-        print(f"Tranfering files to {name} at {path}")
-        ft = FileTransfer(dbPath, studies, path)
-        if study == None:
-            ft.transfer()
-        else:
-            ft.transfer(study)
-        ft.create_log(LOG_DEST)
-
-
-@cli.command(help="Fill records without copying files")
-@click.option("--study", default=None)
-def fill(study):
-    print(f"Filling files")
-    studies = getStudies()
-    dbPath = getDatabasePath()
-    ft = FileTransfer(dbPath, studies, "")
+    studies = get_studies()
+    dbPath = init_db()
+    ft = DicomProcessTransfer(dbPath, studies, "")
     if study == None:
-        ft.fillDataBase()
+        ft.transfer()
     else:
-        ft.fillDataBase(study)
+        ft.transfer(study)
 
-        ft.create_log(LOG_DEST)
+    ft.create_log()
 
 
-@cli.command(help="Export master log")
-def log():
-    studies = getStudies()
-    dbPath = getDatabasePath()
-    ft = FileTransfer(dbPath, studies, "")
-    ft.master_log(LOG_DEST)
-    click.echo(f"Master Log Exported to: {LOG_DEST}")
+@cli.command(help="Reset upload records for a study")
+@click.option("--study", default=None)
+def reset(study):
+    studies = get_studies()
+    dbPath = get_db_path()
+
+    reset_database(dbPath, studies)
+
+
+@cli.command(help="Delete the SQLite database")
+def delete_database():
+    """
+    Delete the SQLite database file.
+    """
+    db_path = get_db_path()
+
+    # Check if the database exists
+    if Path(db_path).exists():
+        # Confirm deletion with the user
+        confirm = input(
+            f"Are you sure you want to delete the database at {db_path}? (y/n): "
+        ).lower()
+        if confirm == "y":
+            try:
+                os.remove(db_path)
+                print(f"Database at {db_path} has been deleted.")
+            except Exception as e:
+                print(f"Error deleting database: {e}")
+        else:
+            print("Database deletion aborted.")
+    else:
+        print(f"No database found at {db_path}.")
 
 
 @cli.command(help="Add directory to clean in as first arg")
-@click.argument(
-    "path",
-    type=click.Path(exists=True),
-)
+@click.argument("path", type=click.Path(exists=True))
 def zip(path):
-    pd = Process(path)
-    pd.process_dir()
+    proccess = Process(path)
+    proccess.process_dir()
+
+
+@cli.command(help="Show the database path")
+def show_db_path():
+    db_path = get_db_path()
+    print(f"Database path: {db_path}")
 
 
 if __name__ == "__main__":

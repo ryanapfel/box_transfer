@@ -9,19 +9,24 @@ from tqdm import tqdm
 
 
 class Process:
-    def __init__(self, directory, output_path="clean", timeout_threshold=15):
+    def __init__(self, directory, output_path="clean"):
         self.directory = directory
         self.output_path = os.path.join(self.directory, output_path)
-        self.timeout_threshold = timeout_threshold  # Timeout threshold in seconds
 
         if not os.path.exists(self.output_path):
             os.makedirs(self.output_path)
 
         # Initialize error tracking
-        self.results = {"success": 0, "zip_errors": defaultdict(int), "dicom_errors": defaultdict(int), "timeout_errors": defaultdict(int)}
+        self.results = {
+            "success": 0,
+            "zip_errors": defaultdict(int),
+            "dicom_errors": defaultdict(int),
+            "timeout_errors": defaultdict(int),
+        }
 
     def process_dir(self):
         # Get the list of all ZIP files in the directory
+
         zip_files = [f for f in os.listdir(self.directory) if f.endswith(".zip")]
 
         # Use tqdm to show a progress bar for the ZIP files processing
@@ -43,7 +48,11 @@ class Process:
                 file_list = zip_file.namelist()
 
                 # Use tqdm to track progress for each file within the ZIP
-                for local_file_name in tqdm(file_list, desc=f"Processing files in {name_without_extension}", unit="file"):
+                for local_file_name in tqdm(
+                    file_list,
+                    desc=f"Processing files in {name_without_extension}",
+                    unit="file",
+                ):
                     try:
                         with zip_file.open(local_file_name) as f:
                             ds = pydicom.dcmread(f)
@@ -54,6 +63,7 @@ class Process:
                         self.results["success"] += 1  # Track success
 
                     except Exception as dicom_error:
+                        print(dicom_error)
                         # Track DICOM processing errors
                         self.results["dicom_errors"][name_without_extension] += 1
 
@@ -74,24 +84,20 @@ class Process:
 
         try:
             # Manually track time to apply timeout
-            start_time = time.time()
-            self.save_with_timeout(ds, os.path.join(local_path, l_name), start_time)
+
+            self.save_with_timeout(ds, os.path.join(local_path, l_name))
+
         except TimeoutError:
             # If the file saving times out, track it as a timeout error
             self.results["timeout_errors"][name_without_extension] += 1
 
-    def save_with_timeout(self, ds, file_path, start_time):
+    def save_with_timeout(self, ds, file_path):
         """Save DICOM file, with manual timeout check."""
         # Continuously check if the time exceeds the timeout threshold while saving
-        while True:
-            # Check if the timeout threshold is exceeded
-            if time.time() - start_time > self.timeout_threshold:
-                raise TimeoutError(f"File saving exceeded the timeout threshold of {self.timeout_threshold} seconds.")
-            
-            try:
-                # Save the DICOM file (this part might take a while)
-                ds.save_as(file_path)
-                break  # Exit the loop if save is successful
-            except Exception as e:
-                # If there's an error while saving, it can be caught here and handled
-                raise e
+        try:
+            # Save the DICOM file (this part might take a while)
+            ds.save_as(file_path)
+
+        except Exception as e:
+            # If there's an error while saving, it can be caught here and handled
+            raise e
